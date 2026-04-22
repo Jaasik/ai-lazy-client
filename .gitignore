@@ -1,34 +1,48 @@
 ```
-# Go-specific ignores
-*.o
-*.a
-*.so
-*.dylib
-*.dll
-*.exe
+# Executables and binaries
+lazygit-newtest
 
-# Dependencies
-vendor/
-
-# Build artifacts
-bin/
-pkg/
-*.mod
-*.sum
-
-# Editors
-.idea/
-.vscode/
-
-# Environment
-.env
-.env.local
-*.env.*
+# Temporary and cache files
+*.tmp
+*.temp
+*.cache
+*.swp
+*.swo
 
 # Logs
 *.log
 
-# Temporary files
-*.tmp
-*~
+# Environment files
+.env
+.env.local
+*.env.*
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+target/
+.gradle/
+
+# Build artifacts
+dist/
+build/
+*.o
+*.obj
+*.out
+*.exe
+*.dll
+*.so
+*.a
+
+# Editors
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db
 ```
