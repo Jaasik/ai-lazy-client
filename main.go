@@ -29,6 +29,9 @@ type model struct {
 	modalOpen  bool
 	modalList  list.Model
 	modalFocus int // 0 = список, 1-4 = кнопки
+
+	// Preview panel scroll state
+	previewScroll int
 }
 
 func initialModel() model {
@@ -81,6 +84,7 @@ func initialModel() model {
 		focusIndex:    1,
 		modalList:     ml,
 		modalFocus:    0,
+		previewScroll: 0,
 	}
 }
 
@@ -103,12 +107,68 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "shift+tab":
 				m.modalFocus = (m.modalFocus - 1 + 5) % 5
 				return m, nil
-			case "up", "down", "k", "j":
+			case "up", "k":
 				if m.modalFocus == 0 {
 					m.modalList, cmd = m.modalList.Update(msg)
 					cmds = append(cmds, cmd)
+				} else if m.modalFocus >= 1 && m.modalFocus <= 4 {
+					// Navigate buttons with up/down when focused on button row
+					if m.modalFocus > 2 {
+						m.modalFocus -= 2
+					} else {
+						m.modalFocus += 2
+					}
+					if m.modalFocus > 4 {
+						m.modalFocus = 4
+					}
+					if m.modalFocus < 1 {
+						m.modalFocus = 1
+					}
 				}
 				return m, tea.Batch(cmds...)
+			case "down", "j":
+				if m.modalFocus == 0 {
+					m.modalList, cmd = m.modalList.Update(msg)
+					cmds = append(cmds, cmd)
+				} else if m.modalFocus >= 1 && m.modalFocus <= 4 {
+					// Navigate buttons with up/down when focused on button row
+					if m.modalFocus <= 2 {
+						m.modalFocus += 2
+					} else {
+						m.modalFocus -= 2
+					}
+					if m.modalFocus > 4 {
+						m.modalFocus = 4
+					}
+					if m.modalFocus < 1 {
+						m.modalFocus = 1
+					}
+				}
+				return m, tea.Batch(cmds...)
+			case "left", "h":
+				if m.modalFocus >= 1 && m.modalFocus <= 4 {
+					if m.modalFocus%2 == 0 {
+						m.modalFocus--
+					} else {
+						m.modalFocus++
+						if m.modalFocus > 4 {
+							m.modalFocus = 4
+						}
+					}
+				}
+				return m, nil
+			case "right", "l":
+				if m.modalFocus >= 1 && m.modalFocus <= 4 {
+					if m.modalFocus%2 == 1 {
+						m.modalFocus++
+						if m.modalFocus > 4 {
+							m.modalFocus = 4
+						}
+					} else {
+						m.modalFocus--
+					}
+				}
+				return m, nil
 			case "enter", " ":
 				if m.modalFocus >= 1 && m.modalFocus <= 4 {
 					return m, nil
@@ -145,7 +205,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.buttonPressed = true
 				return m, nil
 			}
-		case "up", "down", "k", "j":
+		case "up", "k":
+			if m.focusIndex == 1 {
+				m.list, cmd = m.list.Update(msg)
+				cmds = append(cmds, cmd)
+				return m, tea.Batch(cmds...)
+			}
+			// Scroll preview panel with up arrow when not in other focus areas
+			if m.focusIndex == 2 && m.previewScroll > 0 {
+				m.previewScroll--
+				return m, nil
+			}
+		case "down", "j":
 			if m.focusIndex == 1 {
 				m.list, cmd = m.list.Update(msg)
 				cmds = append(cmds, cmd)
@@ -172,6 +243,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.list.SetItems(filtered)
+		}
+		
+		// Scroll preview with up/down when typing long text
+		if msg, ok := msg.(tea.KeyMsg); ok {
+			if msg.String() == "up" && m.previewScroll > 0 {
+				m.previewScroll--
+			}
 		}
 	} else {
 		m.textInput.Blur()
@@ -200,6 +278,7 @@ func (m model) View() string {
 		listBorder = styles.FocusedBorderStyle
 	case 2:
 		searchBorder = styles.FocusedBorderStyle
+		rightBorder = styles.FocusedBorderStyle
 	}
 
 	var leftCol strings.Builder
@@ -224,11 +303,12 @@ func (m model) View() string {
 	var rightCol strings.Builder
 	rightCol.WriteString("\n")
 
+	// Render Preview panel with scrollable multi-line text
 	previewContent := m.textInput.Value()
 	if previewContent == "" {
-		previewContent = styles.RightPanelStyle.Render("(waiting for input...)")
+		previewContent = "(waiting for input...)"
 	}
-	rightCol.WriteString(components.RenderPanel(rightBorder, styles.FixedBoxWidth, styles.PanelHeight, "Preview", []string{previewContent}, ""))
+	rightCol.WriteString(components.RenderScrollablePanel(rightBorder, styles.FixedBoxWidth, styles.PanelHeight, "Preview", previewContent, m.previewScroll))
 	rightCol.WriteString("\n")
 
 	infoLines := components.FormatInfoLines(len(m.originalItems), len(m.list.Items()), m.list.Index()+1, m.buttonPressed)

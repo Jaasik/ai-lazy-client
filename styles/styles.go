@@ -20,6 +20,8 @@ const (
 	FixedBoxWidth = 44
 	PanelHeight   = 10
 	ModalWidth    = 50
+	ButtonWidth   = 12
+	ButtonHeight  = 3
 )
 
 // Base styles
@@ -39,9 +41,9 @@ var (
 	RightPanelStyle = lipgloss.NewStyle().Foreground(ColorLightGray)
 
 	// Buttons
-	ButtonStyle        = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorGray).Bold(true).Padding(0, 2)
-	ButtonFocusedStyle = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorPurple).Bold(true).Padding(0, 2)
-	ModalButtonStyle   = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorBlue).Bold(true).Padding(0, 2)
+	ButtonStyle        = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorGray).Bold(true).Width(ButtonWidth).Height(ButtonHeight).Align(lipgloss.Center, lipgloss.Center)
+	ButtonFocusedStyle = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorPurple).Bold(true).Width(ButtonWidth).Height(ButtonHeight).Align(lipgloss.Center, lipgloss.Center)
+	ModalButtonStyle   = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorBlue).Bold(true).Width(ButtonWidth).Height(ButtonHeight).Align(lipgloss.Center, lipgloss.Center)
 )
 
 // Panel border configuration
