@@ -1,5 +1,9 @@
 ```
-# Compiled and build artifacts
+# Binaries
+*.exe
+*.dll
+*.so
+*.a
 *.o
 *.obj
 *.out
@@ -7,16 +11,35 @@
 # Dependencies
 vendor/
 
-# Logs and temp files
-*.log
+# Build artifacts
+build/
+dist/
+target/
+
+# Temporary files
 *.tmp
+*.log
+
+# Environment files
+.env
+.env.local
+*.env.*
 
 # Editors
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Environment
-.env
-.env.local
-.env.*
+# OS files
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Go-specific
+*.syso
 ```

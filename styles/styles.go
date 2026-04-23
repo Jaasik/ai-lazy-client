@@ -41,9 +41,9 @@ var (
 	RightPanelStyle = lipgloss.NewStyle().Foreground(ColorLightGray)
 
 	// Buttons
-	ButtonStyle        = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorGray).Bold(true).Width(ButtonWidth).Height(ButtonHeight).Align(lipgloss.Center, lipgloss.Center)
-	ButtonFocusedStyle = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorPurple).Bold(true).Width(ButtonWidth).Height(ButtonHeight).Align(lipgloss.Center, lipgloss.Center)
-	ModalButtonStyle   = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorBlue).Bold(true).Width(ButtonWidth).Height(ButtonHeight).Align(lipgloss.Center, lipgloss.Center)
+	ButtonStyle        = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorGray).Bold(true).Padding(0, 2).Align(lipgloss.Center)
+	ButtonFocusedStyle = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorPurple).Bold(true).Padding(0, 2).Align(lipgloss.Center)
+	ModalButtonStyle   = lipgloss.NewStyle().Foreground(ColorWhite).Background(ColorBlue).Bold(true).Padding(0, 2).Align(lipgloss.Center)
 )
 
 // Panel border configuration
