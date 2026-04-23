@@ -234,6 +234,88 @@ func RenderModal(width int, listContent string, buttons []string, focusedBtn int
 		Render(finalContent)
 }
 
+// RenderModalWithButtons renders a modal with title and 4 buttons in 2 rows
+func RenderModalWithButtons(width int, title string, buttons []string, focusedBtn int) string {
+	innerW := width - 2
+
+	// Title
+	titleStyled := lipgloss.NewStyle().
+		Foreground(styles.ColorCyan).
+		Bold(true).
+		Width(innerW).
+		Align(lipgloss.Center).
+		Render(title)
+
+	// Empty space after title
+	emptyLine := strings.Repeat(" ", innerW)
+
+	// Buttons panel - render all buttons with consistent styling
+	var renderedButtons []string
+	for i, btnText := range buttons {
+		var btnStyle lipgloss.Style
+		if i == focusedBtn {
+			btnStyle = styles.ModalButtonStyle
+		} else {
+			btnStyle = styles.ButtonStyle
+		}
+		renderedButtons = append(renderedButtons, btnStyle.Render(btnText))
+	}
+
+	// Arrange buttons in 2 rows (2 buttons per row)
+	row1 := renderedButtons[0] + "  " + renderedButtons[1]
+	row2 := renderedButtons[2] + "  " + renderedButtons[3]
+
+	// Center rows
+	pad1 := (innerW - lipgloss.Width(row1)) / 2
+	if pad1 < 0 {
+		pad1 = 0
+	}
+	r1 := strings.Repeat(" ", pad1) + row1 + strings.Repeat(" ", innerW-lipgloss.Width(row1)-pad1)
+
+	pad2 := (innerW - lipgloss.Width(row2)) / 2
+	if pad2 < 0 {
+		pad2 = 0
+	}
+	r2 := strings.Repeat(" ", pad2) + row2 + strings.Repeat(" ", innerW-lipgloss.Width(row2)-pad2)
+
+	// Button panel with vertical spacing
+	btnPanel := strings.Join([]string{
+		emptyLine,
+		r1,
+		emptyLine,
+		r2,
+		emptyLine,
+	}, "\n")
+
+	// Assemble content
+	content := strings.Join([]string{titleStyled, btnPanel}, "\n")
+
+	// Pad each line to exact width
+	var padded []string
+	for _, line := range strings.Split(content, "\n") {
+		w := lipgloss.Width(line)
+		if w < innerW {
+			line += strings.Repeat(" ", innerW-w)
+		} else if w > innerW {
+			line = line[:innerW]
+		}
+		padded = append(padded, line)
+	}
+	finalContent := strings.Join(padded, "\n")
+
+	// Apply pink border
+	boxBorder := lipgloss.Border{
+		Top: "─", Bottom: "─", Left: "│", Right: "│",
+		TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
+	}
+
+	return lipgloss.NewStyle().
+		Border(boxBorder).
+		BorderForeground(styles.ColorPink).
+		Width(width).
+		Render(finalContent)
+}
+
 // FormatCounter formats the list counter text
 func FormatCounter(current, total int) string {
 	return fmt.Sprintf("%d of %d", current+1, total)
