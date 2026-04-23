@@ -240,16 +240,11 @@ func FormatCounter(current, total int) string {
 }
 
 // FormatInfoLines formats information lines for the info panel
-func FormatInfoLines(totalFiles, filtered, selected int, buttonPressed bool) []string {
-	btnStatus := "Button: inactive"
-	if buttonPressed {
-		btnStatus = "Button: ACTIVE"
-	}
+func FormatInfoLines(totalFiles, filtered, selected int) []string {
 	return []string{
 		fmt.Sprintf("Total files: %d", totalFiles),
 		fmt.Sprintf("Filtered: %d", filtered),
 		fmt.Sprintf("Selected: %d", selected),
-		btnStatus,
 		"",
 		"Shortcuts:",
 		"  tab/shift+tab - focus",

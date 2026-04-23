@@ -23,39 +23,30 @@ type model struct {
 	height        int
 	quitting      bool
 	focusIndex    int // 0 = кнопка, 1 = список, 2 = ввод
-	buttonPressed bool
 
 	// Modal state
-	modalOpen  bool
-	modalList  list.Model
-	modalFocus int // 0 = список, 1-4 = кнопки
+	modalOpen   bool
+	modalList   list.Model
+	modalFocus  int // 0 = список, 1-4 = кнопки
+	optionsMode bool  // true = options module with 2 frames, false = simple modal
 
 	// Preview panel scroll state
 	previewScroll int
 }
 
 func initialModel() model {
-	items := []list.Item{
-		forms.FileItem{Path: "1/Config.md", Status: "M"},
-		forms.FileItem{Path: "2/commands/git.go", Status: "M"},
-		forms.FileItem{Path: "3/commands/git_test.go", Status: "M"},
-		forms.FileItem{Path: "4/config/app_config.go", Status: "M"},
-		forms.FileItem{Path: "5/gui/gui.go", Status: "M"},
-		forms.FileItem{Path: "6/Config.md", Status: "M"},
-		forms.FileItem{Path: "7/commands/git.go", Status: "M"},
-		forms.FileItem{Path: "8/commands/git_test.go", Status: "M"},
-		forms.FileItem{Path: "9/config/app_config.go", Status: "M"},
-		forms.FileItem{Path: "10/gui/gui.go", Status: "M"},
-		forms.FileItem{Path: "11/Config.md", Status: "M"},
-		forms.FileItem{Path: "12/commands/git.go", Status: "M"},
-		forms.FileItem{Path: "13/commands/git_test.go", Status: "M"},
-		forms.FileItem{Path: "14/config/app_config.go", Status: "M"},
-		forms.FileItem{Path: "15/gui/gui.go", Status: "M"},
-		forms.FileItem{Path: "16/Config.md", Status: "M"},
-		forms.FileItem{Path: "17/commands/git.go", Status: "M"},
-		forms.FileItem{Path: "18/commands/git_test.go", Status: "M"},
-		forms.FileItem{Path: "19/config/app_config.go", Status: "M"},
-		forms.FileItem{Path: "20/gui/gui.go", Status: "M"},
+	// Load files from the files directory
+	filesDir := forms.GetProjectFilesDir()
+	items, err := forms.LoadFilesFromDir(filesDir)
+	if err != nil || len(items) == 0 {
+		// Fallback to default items if directory is empty or doesn't exist
+		items = []list.Item{
+			forms.FileItem{Path: "1/Config.md", Status: "M"},
+			forms.FileItem{Path: "2/commands/git.go", Status: "M"},
+			forms.FileItem{Path: "3/commands/git_test.go", Status: "M"},
+			forms.FileItem{Path: "4/config/app_config.go", Status: "M"},
+			forms.FileItem{Path: "5/gui/gui.go", Status: "M"},
+		}
 	}
 
 	l := forms.NewFileList(items)
@@ -84,6 +75,7 @@ func initialModel() model {
 		focusIndex:    1,
 		modalList:     ml,
 		modalFocus:    0,
+		optionsMode:   false,
 		previewScroll: 0,
 	}
 }
@@ -100,48 +92,95 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "esc", "q":
 				m.modalOpen = false
+				m.optionsMode = false
 				return m, nil
 			case "tab":
-				m.modalFocus = (m.modalFocus + 1) % 5
+				if m.optionsMode {
+					// Options mode: 0 = first frame list, 1-4 = buttons
+					m.modalFocus = (m.modalFocus + 1) % 5
+				} else {
+					// Simple modal mode: 0 = list, 1-4 = buttons
+					m.modalFocus = (m.modalFocus + 1) % 5
+				}
 				return m, nil
 			case "shift+tab":
-				m.modalFocus = (m.modalFocus - 1 + 5) % 5
+				if m.optionsMode {
+					m.modalFocus = (m.modalFocus - 1 + 5) % 5
+				} else {
+					m.modalFocus = (m.modalFocus - 1 + 5) % 5
+				}
 				return m, nil
 			case "up", "k":
-				if m.modalFocus == 0 {
-					m.modalList, cmd = m.modalList.Update(msg)
-					cmds = append(cmds, cmd)
-				} else if m.modalFocus >= 1 && m.modalFocus <= 4 {
-					// Navigate buttons with up/down when focused on button row
-					if m.modalFocus > 2 {
-						m.modalFocus -= 2
-					} else {
-						m.modalFocus += 2
+				if m.optionsMode {
+					if m.modalFocus == 0 {
+						// Navigate in first frame list (just visual, no actual list)
+						return m, nil
+					} else if m.modalFocus >= 1 && m.modalFocus <= 4 {
+						// Navigate buttons vertically
+						if m.modalFocus > 2 {
+							m.modalFocus -= 2
+						} else {
+							m.modalFocus += 2
+						}
+						if m.modalFocus > 4 {
+							m.modalFocus = 4
+						}
+						if m.modalFocus < 1 {
+							m.modalFocus = 1
+						}
 					}
-					if m.modalFocus > 4 {
-						m.modalFocus = 4
-					}
-					if m.modalFocus < 1 {
-						m.modalFocus = 1
+				} else {
+					if m.modalFocus == 0 {
+						m.modalList, cmd = m.modalList.Update(msg)
+						cmds = append(cmds, cmd)
+					} else if m.modalFocus >= 1 && m.modalFocus <= 4 {
+						if m.modalFocus > 2 {
+							m.modalFocus -= 2
+						} else {
+							m.modalFocus += 2
+						}
+						if m.modalFocus > 4 {
+							m.modalFocus = 4
+						}
+						if m.modalFocus < 1 {
+							m.modalFocus = 1
+						}
 					}
 				}
 				return m, tea.Batch(cmds...)
 			case "down", "j":
-				if m.modalFocus == 0 {
-					m.modalList, cmd = m.modalList.Update(msg)
-					cmds = append(cmds, cmd)
-				} else if m.modalFocus >= 1 && m.modalFocus <= 4 {
-					// Navigate buttons with up/down when focused on button row
-					if m.modalFocus <= 2 {
-						m.modalFocus += 2
-					} else {
-						m.modalFocus -= 2
+				if m.optionsMode {
+					if m.modalFocus == 0 {
+						return m, nil
+					} else if m.modalFocus >= 1 && m.modalFocus <= 4 {
+						if m.modalFocus <= 2 {
+							m.modalFocus += 2
+						} else {
+							m.modalFocus -= 2
+						}
+						if m.modalFocus > 4 {
+							m.modalFocus = 4
+						}
+						if m.modalFocus < 1 {
+							m.modalFocus = 1
+						}
 					}
-					if m.modalFocus > 4 {
-						m.modalFocus = 4
-					}
-					if m.modalFocus < 1 {
-						m.modalFocus = 1
+				} else {
+					if m.modalFocus == 0 {
+						m.modalList, cmd = m.modalList.Update(msg)
+						cmds = append(cmds, cmd)
+					} else if m.modalFocus >= 1 && m.modalFocus <= 4 {
+						if m.modalFocus <= 2 {
+							m.modalFocus += 2
+						} else {
+							m.modalFocus -= 2
+						}
+						if m.modalFocus > 4 {
+							m.modalFocus = 4
+						}
+						if m.modalFocus < 1 {
+							m.modalFocus = 1
+						}
 					}
 				}
 				return m, tea.Batch(cmds...)
@@ -175,8 +214,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		m.modalList, cmd = m.modalList.Update(msg)
-		cmds = append(cmds, cmd)
+		if !m.optionsMode {
+			m.modalList, cmd = m.modalList.Update(msg)
+			cmds = append(cmds, cmd)
+		}
 		return m, tea.Batch(cmds...)
 	}
 
@@ -202,7 +243,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", " ":
 			if m.focusIndex == 0 {
 				m.modalOpen = true
-				m.buttonPressed = true
+				m.optionsMode = true // Use new options module with 2 frames
 				return m, nil
 			}
 		case "up", "k":
@@ -244,7 +285,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.list.SetItems(filtered)
 		}
-		
+
 		// Scroll preview with up/down when typing long text
 		if msg, ok := msg.(tea.KeyMsg); ok {
 			if msg.String() == "up" && m.previewScroll > 0 {
@@ -311,7 +352,7 @@ func (m model) View() string {
 	rightCol.WriteString(components.RenderScrollablePanel(rightBorder, styles.FixedBoxWidth, styles.PanelHeight, "Preview", previewContent, m.previewScroll))
 	rightCol.WriteString("\n")
 
-	infoLines := components.FormatInfoLines(len(m.originalItems), len(m.list.Items()), m.list.Index()+1, m.buttonPressed)
+	infoLines := components.FormatInfoLines(len(m.originalItems), len(m.list.Items()), m.list.Index()+1)
 	rightCol.WriteString(components.RenderPanel(rightBorder, styles.FixedBoxWidth, styles.PanelHeight, "Info", infoLines, ""))
 
 	mainView := lipgloss.JoinHorizontal(lipgloss.Top, leftCol.String(), rightCol.String())
@@ -319,9 +360,15 @@ func (m model) View() string {
 	footer := fmt.Sprintf("\nFocus: %s • tab: switch • ↑/k ↓/j: nav • q: quit", focusLabel)
 
 	if m.modalOpen {
-		modalList := m.modalList.View()
 		buttons := []string{"[1] OK", "[2] Apply", "[3] Cancel", "[4] Reset"}
-		modal := components.RenderModal(styles.ModalWidth, modalList, buttons, m.modalFocus)
+		var modal string
+		if m.optionsMode {
+			// Use new options module with 2 separate frames and 4 buttons in 2 rows
+			modal = components.RenderDualFrameOptions(styles.ModalWidth, "Options", "Actions", buttons, m.modalFocus)
+		} else {
+			modalList := m.modalList.View()
+			modal = components.RenderModal(styles.ModalWidth, modalList, buttons, m.modalFocus)
+		}
 		overlay := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal)
 		return overlay
 	}

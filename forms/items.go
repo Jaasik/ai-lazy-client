@@ -3,6 +3,8 @@ package forms
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -93,4 +95,49 @@ func NewModalList(items []list.Item) list.Model {
 	l.SetShowPagination(false)
 	l.SetShowTitle(false)
 	return l
+}
+
+// LoadFilesFromDir loads file names from a directory
+func LoadFilesFromDir(dirPath string) ([]list.Item, error) {
+	var items []list.Item
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			items = append(items, FileItem{Path: entry.Name(), Status: " "})
+		}
+	}
+
+	return items, nil
+}
+
+// GetProjectFilesDir returns the path to the files directory in the project
+func GetProjectFilesDir() string {
+	// Get the directory where the executable is located
+	execPath, err := os.Executable()
+	if err != nil {
+		// Fallback to current working directory
+		execPath, _ = os.Getwd()
+	}
+	execDir := filepath.Dir(execPath)
+
+	// Check if files directory exists relative to executable
+	filesDir := filepath.Join(execDir, "files")
+	if _, err := os.Stat(filesDir); err == nil {
+		return filesDir
+	}
+
+	// Check if files directory exists relative to current working directory
+	cwd, _ := os.Getwd()
+	filesDir = filepath.Join(cwd, "files")
+	if _, err := os.Stat(filesDir); err == nil {
+		return filesDir
+	}
+
+	// Default to relative path from where the program is run
+	return "files"
 }
