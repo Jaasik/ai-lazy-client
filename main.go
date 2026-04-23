@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,40 +12,52 @@ import (
 )
 
 type App struct {
-	files        []string
-	selectedFile int
-	fileContent  string
-	inputText    string
-	cursorX      int
-	currentView  string // "files", "content", "input"
-	gui          *gocui.Gui
+	gui           *gocui.Gui
+	files         []string
+	selectedFile  int
+	inputText     string
+	cursorX       int
+	currentView   string // "files", "status", "help", "content", "input"
+	fileContent   string
 }
 
-func NewApp() *App {
-	return &App{
-		files:       loadFiles(),
+func NewApp() (*App, error) {
+	app := &App{
 		currentView: "files",
 	}
-}
-
-func loadFiles() []string {
-	var files []string
-	filepath.Walk("./files", func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !info.IsDir() {
-			files = append(files, info.Name())
-		}
-		return nil
-	})
-	return files
-}
-
-func (app *App) loadFileContent(name string) {
-	content, err := ioutil.ReadFile(filepath.Join("./files", name))
+	
+	// Load files from ./files directory
+	filesDir := "./files"
+	if err := os.MkdirAll(filesDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create files directory: %v", err)
+	}
+	
+	entries, err := ioutil.ReadDir(filesDir)
 	if err != nil {
-		app.fileContent = "Error reading file: " + err.Error()
+		return nil, fmt.Errorf("failed to read files directory: %v", err)
+	}
+	
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			app.files = append(app.files, entry.Name())
+		}
+	}
+	
+	if len(app.files) > 0 {
+		app.loadFileContent(0)
+	}
+	
+	return app, nil
+}
+
+func (app *App) loadFileContent(index int) {
+	if index < 0 || index >= len(app.files) {
+		return
+	}
+	
+	content, err := ioutil.ReadFile(filepath.Join("./files", app.files[index]))
+	if err != nil {
+		app.fileContent = fmt.Sprintf("Error reading file: %v", err)
 		return
 	}
 	app.fileContent = string(content)
@@ -52,7 +65,7 @@ func (app *App) loadFileContent(name string) {
 
 func (app *App) layout(g *gocui.Gui) error {
 	maxX, maxY := g.Size()
-
+	
 	// Service panel (top)
 	if v, err := g.SetView("service", 0, 0, maxX-1, 3); err != nil {
 		if err != gocui.ErrUnknownView {
@@ -60,11 +73,14 @@ func (app *App) layout(g *gocui.Gui) error {
 		}
 		v.Title = " LazyGit Clone Service "
 		v.Frame = true
-		fmt.Fprintln(v, "Welcome to LazyGit Clone - File Manager")
+		fmt.Fprintln(v, "Welcome to LazyGit Clone - Press 'q' to quit")
 	}
-
-	// Files panel (left top)
-	if v, err := g.SetView("files", 0, 3, maxX/2-1, maxY/2); err != nil {
+	
+	// Left column panels
+	leftWidth := maxX / 2
+	
+	// Files panel
+	if v, err := g.SetView("files", 0, 3, leftWidth-1, maxY/2); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -74,62 +90,67 @@ func (app *App) layout(g *gocui.Gui) error {
 		v.Wrap = false
 		app.renderFiles(v)
 	}
-
-	// Status panel (left middle)
-	if v, err := g.SetView("status", 0, maxY/2, maxX/2-1, maxY*2/3); err != nil {
+	
+	// Status panel
+	if v, err := g.SetView("status", 0, maxY/2, leftWidth-1, maxY-2); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
 		v.Title = " Status "
 		v.Frame = true
-		fmt.Fprintln(v, "Ready")
-		fmt.Fprintf(v, "Selected: %s\n", app.getSelectedFile())
+		fmt.Fprintf(v, "Selected: %s\nTotal files: %d\nNavigation: ↑/↓ arrows\nSelect: Enter\nSwitch panel: Tab", 
+			func() string {
+				if len(app.files) > 0 && app.selectedFile < len(app.files) {
+					return app.files[app.selectedFile]
+				}
+				return "none"
+			}(),
+			len(app.files))
 	}
-
-	// Help panel (left bottom)
-	if v, err := g.SetView("help", 0, maxY*2/3, maxX/2-1, maxY-2); err != nil {
+	
+	// Help panel
+	if v, err := g.SetView("help", 0, maxY-2, leftWidth-1, maxY); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
 		v.Title = " Help "
 		v.Frame = true
-		fmt.Fprintln(v, "Up/Down: Navigate files")
+		fmt.Fprintln(v, "↑/↓: Navigate files")
 		fmt.Fprintln(v, "Enter: Select file")
 		fmt.Fprintln(v, "Tab: Switch panels")
 		fmt.Fprintln(v, "q: Quit")
 	}
-
-	// Content panel (right top)
-	if v, err := g.SetView("content", maxX/2, 3, maxX-1, maxY/2+maxY/3); err != nil {
+	
+	// Right column panels
+	rightStart := leftWidth
+	
+	// File Content panel
+	if v, err := g.SetView("content", rightStart, 3, maxX-1, maxY/2+maxY/4); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
 		v.Title = " File Content "
 		v.Frame = true
-		v.Editable = false
 		v.Wrap = true
 		app.renderContent(v)
 	}
-
-	// Input panel (right bottom)
-	if v, err := g.SetView("input", maxX/2, maxY/2+maxY/3, maxX-1, maxY-2); err != nil {
+	
+	// Input panel
+	if v, err := g.SetView("input", rightStart, maxY/2+maxY/4, maxX-1, maxY); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
-		v.Title = " Input "
+		v.Title = " Input (type here) "
 		v.Frame = true
 		v.Editable = true
 		v.Wrap = true
-		// Set cursor position based on input text length
-		app.cursorX = len(app.inputText)
-		v.Write([]byte(app.inputText))
+		if v.Buffer() == "" {
+			v.Write([]byte(app.inputText))
+		} else {
+			app.inputText = v.Buffer()
+		}
 	}
-
-	// Set active view
-	if err := app.setActiveView(g); err != nil {
-		return err
-	}
-
+	
 	return nil
 }
 
@@ -137,9 +158,9 @@ func (app *App) renderFiles(v *gocui.View) {
 	v.Clear()
 	for i, file := range app.files {
 		if i == app.selectedFile {
-			fmt.Fprintln(v, "> "+file)
+			fmt.Fprintf(v, "> %s\n", file)
 		} else {
-			fmt.Fprintln(v, "  "+file)
+			fmt.Fprintf(v, "  %s\n", file)
 		}
 	}
 }
@@ -147,109 +168,161 @@ func (app *App) renderFiles(v *gocui.View) {
 func (app *App) renderContent(v *gocui.View) {
 	v.Clear()
 	lines := strings.Split(app.fileContent, "\n")
+	colors := []gocui.Attribute{gocui.ColorWhite, gocui.ColorCyan, gocui.ColorGreen, gocui.ColorYellow, gocui.ColorMagenta}
+	
 	for i, line := range lines {
-		colorCode := i%5 + 31 // Cycle through colors 31-35
-		fmt.Fprintf(v, "\x1b[%dm%s\x1b[0m\n", colorCode, line)
+		color := colors[i%len(colors)]
+		fmt.Fprintf(v, "%s%s\n", color, line)
 	}
 }
 
-func (app *App) setActiveView(g *gocui.Gui) error {
-	// Set active view - current view will have focus
+func (app *App) nextFile() {
+	if len(app.files) == 0 {
+		return
+	}
+	app.selectedFile = (app.selectedFile + 1) % len(app.files)
+	app.loadFileContent(app.selectedFile)
+}
+
+func (app *App) prevFile() {
+	if len(app.files) == 0 {
+		return
+	}
+	app.selectedFile = (app.selectedFile - 1 + len(app.files)) % len(app.files)
+	app.loadFileContent(app.selectedFile)
+}
+
+func (app *App) selectFile() {
+	// File is already selected, just update status
+}
+
+func (app *App) switchPanel() {
+	panels := []string{"files", "status", "help", "content", "input"}
+	currentIdx := 0
+	for i, p := range panels {
+		if p == app.currentView {
+			currentIdx = i
+			break
+		}
+	}
+	nextIdx := (currentIdx + 1) % len(panels)
+	app.currentView = panels[nextIdx]
+}
+
+func (app *App) keyBindings(g *gocui.Gui) error {
+	// Global keybindings
+	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("", 'q', gocui.ModNone, quit); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("", gocui.KeyTab, gocui.ModNone, app.handleTab); err != nil {
+		return err
+	}
+	
+	// Files panel keybindings
+	if err := g.SetKeybinding("files", gocui.KeyArrowUp, gocui.ModNone, app.handleUp); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("files", gocui.KeyArrowDown, gocui.ModNone, app.handleDown); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("files", gocui.KeyEnter, gocui.ModNone, app.handleEnter); err != nil {
+		return err
+	}
+	
+	// Content panel keybindings
+	if err := g.SetKeybinding("content", gocui.KeyArrowUp, gocui.ModNone, app.handleUp); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("content", gocui.KeyArrowDown, gocui.ModNone, app.handleDown); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("content", gocui.KeyEnter, gocui.ModNone, app.handleEnter); err != nil {
+		return err
+	}
+	
+	// Status panel keybindings
+	if err := g.SetKeybinding("status", gocui.KeyArrowUp, gocui.ModNone, app.handleUp); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("status", gocui.KeyArrowDown, gocui.ModNone, app.handleDown); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("status", gocui.KeyEnter, gocui.ModNone, app.handleEnter); err != nil {
+		return err
+	}
+	
+	// Help panel keybindings
+	if err := g.SetKeybinding("help", gocui.KeyArrowUp, gocui.ModNone, app.handleUp); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("help", gocui.KeyArrowDown, gocui.ModNone, app.handleDown); err != nil {
+		return err
+	}
+	if err := g.SetKeybinding("help", gocui.KeyEnter, gocui.ModNone, app.handleEnter); err != nil {
+		return err
+	}
+	
+	return nil
+}
+
+func (app *App) handleUp(g *gocui.Gui, v *gocui.View) error {
+	if app.currentView == "files" || app.currentView == "content" || app.currentView == "status" || app.currentView == "help" {
+		app.prevFile()
+	}
+	return nil
+}
+
+func (app *App) handleDown(g *gocui.Gui, v *gocui.View) error {
+	if app.currentView == "files" || app.currentView == "content" || app.currentView == "status" || app.currentView == "help" {
+		app.nextFile()
+	}
+	return nil
+}
+
+func (app *App) handleEnter(g *gocui.Gui, v *gocui.View) error {
+	if app.currentView == "files" || app.currentView == "content" || app.currentView == "status" || app.currentView == "help" {
+		app.selectFile()
+	}
+	return nil
+}
+
+func (app *App) handleTab(g *gocui.Gui, v *gocui.View) error {
+	app.switchPanel()
 	g.SetCurrentView(app.currentView)
 	return nil
 }
 
-func (app *App) getSelectedFile() string {
-	if len(app.files) > 0 && app.selectedFile >= 0 && app.selectedFile < len(app.files) {
-		return app.files[app.selectedFile]
-	}
-	return "none"
-}
-
-func nextView(current string) string {
-	switch current {
-	case "files":
-		return "content"
-	case "content":
-		return "input"
-	case "input":
-		return "files"
-	default:
-		return "files"
-	}
-}
-
-func (app *App) quit(g *gocui.Gui, v *gocui.View) error {
+func quit(g *gocui.Gui, v *gocui.View) error {
 	return gocui.ErrQuit
 }
 
-func (app *App) navigateFiles(g *gocui.Gui, v *gocui.View, dir int) error {
-	newIdx := app.selectedFile + dir
-	if newIdx >= 0 && newIdx < len(app.files) {
-		app.selectedFile = newIdx
-	}
-	return nil
-}
-
-func (app *App) selectFile(g *gocui.Gui, v *gocui.View) error {
-	if len(app.files) > 0 {
-		app.loadFileContent(app.files[app.selectedFile])
-		if contentV, err := g.View("content"); err == nil {
-			contentV.Clear()
-			app.renderContent(contentV)
-		}
-	}
-	return nil
-}
-
-func (app *App) switchPanel(g *gocui.Gui, v *gocui.View) error {
-	app.currentView = nextView(app.currentView)
-	return nil
-}
-
-func (app *App) onMouseClick(g *gocui.Gui, v *gocui.View) error {
-	if v != nil {
-		app.currentView = v.Name()
-	}
-	return nil
-}
-
 func main() {
-	app := NewApp()
-	if len(app.files) > 0 {
-		app.loadFileContent(app.files[0])
+	app, err := NewApp()
+	if err != nil {
+		log.Fatalf("Failed to create app: %v", err)
 	}
-
-	g := gocui.NewGui()
-	defer g.Close()
-
-	app.gui = g
 	
-	// Enable mouse support
-	g.Mouse = true
-
-	g.SetLayout(app.layout)
-
-	// Key bindings
-	g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, app.quit)
-	g.SetKeybinding("", 'q', gocui.ModNone, app.quit)
-
-	// Navigation in files
-	g.SetKeybinding("files", gocui.KeyArrowUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.navigateFiles(g, v, -1)
-	})
-	g.SetKeybinding("files", gocui.KeyArrowDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.navigateFiles(g, v, 1)
-	})
-	g.SetKeybinding("files", gocui.KeyEnter, gocui.ModNone, app.selectFile)
-
-	// Switch between panels
-	g.SetKeybinding("", gocui.KeyTab, gocui.ModNone, app.switchPanel)
-
-	// Mouse support
-	g.SetKeybinding("", gocui.MouseLeft, gocui.ModNone, app.onMouseClick)
-
-	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit {
-		panic(err)
+	gui := gocui.NewGui()
+	if gui == nil {
+		log.Fatalf("Failed to create GUI")
+	}
+	defer gui.Close()
+	
+	app.gui = gui
+	
+	gui.SetLayout(app.layout)
+	
+	if err := app.keyBindings(gui); err != nil {
+		log.Fatalf("Failed to set keybindings: %v", err)
+	}
+	
+	// Set initial focus
+	gui.SetCurrentView("files")
+	
+	if err := gui.MainLoop(); err != nil && err != gocui.ErrQuit {
+		log.Fatalf("GUI error: %v", err)
 	}
 }
