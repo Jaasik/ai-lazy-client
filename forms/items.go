@@ -141,3 +141,15 @@ func GetProjectFilesDir() string {
 	// Default to relative path from where the program is run
 	return "files"
 }
+
+// ReadFileContent reads and returns the content of a file
+func ReadFileContent(dirPath, fileName string) string {
+	fullPath := filepath.Join(dirPath, fileName)
+	
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return fmt.Sprintf("Ошибка чтения файла: %v", err)
+	}
+	
+	return string(data)
+}
